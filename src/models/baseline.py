@@ -3,9 +3,17 @@ import joblib
 import pandas as pd
 from sklearn.metrics import r2_score, mean_squared_error
 import numpy as np
+import sys
 
-PKL_PATH = os.path.join("data", "processed", "processed_data.pkl")
-SAVE_DIR = r'd:\ECNU\stock-return-transfer-learning\output\models'
+# 加载调参工具（使用项目内的 tuning 模块）
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from tuning import tune_elasticnet_ts, extract_hard_transfer_params
+
+# 获取项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PKL_PATH = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
+SAVE_DIR = os.path.join(BASE_DIR, "output", "models")
 
 data = joblib.load(PKL_PATH)
 X_target_train = data['X_target_train']

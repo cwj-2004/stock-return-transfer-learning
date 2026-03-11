@@ -8,8 +8,10 @@ from sklearn.metrics import r2_score, mean_squared_error
 import sys
 
 # 数据路径
-PKL_PATH = os.path.join("data", "processed", "processed_data.pkl")
-SAVE_DIR = r'd:\ECNU\stock-return-transfer-learning\output\models'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PKL_PATH = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
+SAVE_DIR = os.path.join(BASE_DIR, "output", "models")
 
 # 加载调参工具（使用项目内的 tuning 模块）
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))

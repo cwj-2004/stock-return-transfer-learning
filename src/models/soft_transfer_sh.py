@@ -3,13 +3,15 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import r2_score, mean_squared_error
-
 import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from genet import GENet, load_theta0_vector, soft_genet_grid_search
 
-PROCESSED_PKL = os.path.join("data", "processed", "processed_data.pkl")
-MODELS_DIR = r'd:\ECNU\stock-return-transfer-learning\output\models'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PROCESSED_PKL = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
+MODELS_DIR = os.path.join(BASE_DIR, "output", "models")
 SOFT_MODEL_PATH = os.path.join(MODELS_DIR, "soft_sh_genet.pkl")
 THETA_HARD_PATH = os.path.join(MODELS_DIR, "theta_hard_sh.pkl")
 

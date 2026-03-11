@@ -34,14 +34,14 @@ def read_all_csv_in(dir_path: str) -> pd.DataFrame:
     return pd.concat(dfs, axis=0, ignore_index=True)
 
 # === 配置路径 ===
-DATA_DIR = r"d:\ECNU\大创\latest data"  # 存放最新数据目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data", "raw", "latest_data")  # 存放最新数据目录
 OUTPUT_PATH = os.path.join("data", "processed", "processed_data.pkl")
 TEST_SPLIT_DATE = "2023-01-01"  # 北交所测试集分割日期
-# 使用绝对路径避免相对路径问题
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-REAL_RETURNS_PATH = os.path.join(BASE_DIR, "..", "data", "月个股回报率文件100146906(仅供华东师范大学使用)", "TRD_Mnth.csv")
-CODE_MAP_PDF_PATH = os.path.join(BASE_DIR, "..", "data", "附件：北交所存量上市公司股票新旧代码对照表.pdf")
-CODE_MAP_TXT_PATH = os.path.join(BASE_DIR, "..", "data", "对照.txt")
+# 使用相对路径，指向项目内的 data/raw 目录
+REAL_RETURNS_PATH = os.path.join(BASE_DIR, "data", "raw", "TRD_Mnth.csv")
+CODE_MAP_PDF_PATH = os.path.join(BASE_DIR, "data", "raw", "附件：北交所存量上市公司股票新旧代码对照表.pdf")
+CODE_MAP_TXT_PATH = os.path.join(BASE_DIR, "data", "raw", "对照.txt")
 
 # === 关键列 ===
 ID_COLUMNS = ["Stkcd", "Date"]

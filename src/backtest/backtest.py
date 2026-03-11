@@ -4,13 +4,20 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-CSV_PATH = r"d:\ECNU\stock-return-transfer-learning\output\models\hard_transfer_elasticnet_monthly_returns.csv"
-OUTPUT_DIR = r"d:\ECNU\stock-return-transfer-learning\output\models"
-PLOTS_DIR = r"d:\ECNU\stock-return-transfer-learning\output\plots"
+# 配置 matplotlib 支持中文显示
+plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS']
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+# 获取项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+CSV_PATH = os.path.join(BASE_DIR, "output", "models", "hard_transfer_elasticnet_monthly_returns.csv")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output", "models")
+PLOTS_DIR = os.path.join(BASE_DIR, "output", "plots")
 STRATEGY_COL = "long_short_ret"
 RF_ANNUAL = 0.0
-REAL_RETURNS_PATH = r"d:\ECNU\大创\data\月个股回报率文件100146906(仅供华东师范大学使用)\TRD_Mnth.csv"
-CODE_MAP_TXT_PATH = r"d:\ECNU\大创\data\对照.txt"
+REAL_RETURNS_PATH = os.path.join(BASE_DIR, "data", "raw", "TRD_Mnth.csv")
+CODE_MAP_TXT_PATH = os.path.join(BASE_DIR, "data", "raw", "对照.txt")
 
 def load_returns(csv_path: str, col: str) -> pd.Series:
     df = pd.read_csv(csv_path)
@@ -358,15 +365,16 @@ def plot_combined_equity_curves(equity_data: dict,
     print(f"保存对比图: {output_path}")
 
 def main():
-    # 所有模型逐股票预测 CSV
-    baseline_pred_csv = r"d:\ECNU\大创\models\baseline_bj_predictions_oos.csv"
-    hard_sh_pred_csv = r"d:\ECNU\大创\models\hard_sh_predictions_oos.csv"
-    hard_sz_pred_csv = r"d:\ECNU\大创\models\hard_sz_predictions_oos.csv"
-    hard_pred_csv = r"d:\ECNU\大创\models\hard_transfer_predictions_oos.csv"  # 双市场
-    soft_sh_pred_csv = r"d:\ECNU\大创\models\soft_sh_predictions_oos.csv"
-    soft_sz_pred_csv = r"d:\ECNU\大创\models\soft_sz_predictions_oos.csv"
-    soft_pred_csv = r"d:\ECNU\大创\models\soft_transfer_predictions_oos.csv"  # 双市场
-    two_stage_pred_csv = r"d:\ECNU\大创\models\two_stage_predictions_oos.csv"  # 两阶段估计
+    # 所有模型逐股票预测 CSV（使用相对路径）
+    models_dir = os.path.join(BASE_DIR, "output", "models")
+    baseline_pred_csv = os.path.join(models_dir, "baseline_bj_predictions_oos.csv")
+    hard_sh_pred_csv = os.path.join(models_dir, "hard_sh_predictions_oos.csv")
+    hard_sz_pred_csv = os.path.join(models_dir, "hard_sz_predictions_oos.csv")
+    hard_pred_csv = os.path.join(models_dir, "hard_transfer_predictions_oos.csv")  # 双市场
+    soft_sh_pred_csv = os.path.join(models_dir, "soft_sh_predictions_oos.csv")
+    soft_sz_pred_csv = os.path.join(models_dir, "soft_sz_predictions_oos.csv")
+    soft_pred_csv = os.path.join(models_dir, "soft_transfer_predictions_oos.csv")  # 双市场
+    two_stage_pred_csv = os.path.join(models_dir, "two_stage_predictions_oos.csv")  # 两阶段估计
 
     # 存储用于对比的净值曲线
     comparison_equity = {}

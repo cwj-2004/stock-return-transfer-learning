@@ -30,6 +30,9 @@ output/models/*
 output/plots/*
 processed_data/
 
+# Raw data files (too large for GitHub, users should place locally)
+data/raw/*
+
 # IDE
 .vscode/
 .idea/
