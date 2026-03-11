@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 CSV_PATH = r"d:\ECNU\stock-return-transfer-learning\output\models\hard_transfer_elasticnet_monthly_returns.csv"
 OUTPUT_DIR = r"d:\ECNU\stock-return-transfer-learning\output\models"
+PLOTS_DIR = r"d:\ECNU\stock-return-transfer-learning\output\plots"
 STRATEGY_COL = "long_short_ret"
 RF_ANNUAL = 0.0
 REAL_RETURNS_PATH = r"d:\ECNU\大创\data\月个股回报率文件100146906(仅供华东师范大学使用)\TRD_Mnth.csv"
@@ -285,12 +286,15 @@ def save_report(metrics: dict,
                 drawdown: pd.Series,
                 out_dir: str,
                 name: str,
-                market_equity: pd.Series | None = None):
+                market_equity: pd.Series | None = None,
+                plots_dir: str = None):
     os.makedirs(out_dir, exist_ok=True)
+    if plots_dir:
+        os.makedirs(plots_dir, exist_ok=True)
     # 指标表
     report_path = os.path.join(out_dir, f"{name}_backtest_report.csv")
     pd.Series(metrics).to_csv(report_path)
-    # 净值曲线
+    # 净值曲线 - 保存到 plots 目录
     fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
     equity.plot(ax=ax[0], color="tab:blue", label="Strategy")
     if market_equity is not None:
@@ -304,11 +308,54 @@ def save_report(metrics: dict,
     ax[1].set_title(f"{name} Max Drawdown Curve")
     ax[1].grid(True, alpha=0.3)
     fig.tight_layout()
-    curve_path = os.path.join(out_dir, f"{name}_equity_curve.png")
+    # 使用 plots 目录（如果提供）或默认输出目录
+    curve_path = os.path.join(plots_dir or out_dir, f"{name}_equity_curve.png")
     fig.savefig(curve_path, dpi=160)
     plt.close(fig)
     print(f"保存报告: {report_path}")
     print(f"保存净值图: {curve_path}")
+
+def plot_combined_equity_curves(equity_data: dict,
+                                out_dir: str,
+                                title: str = "Equity Curve Comparison",
+                                output_name: str = "combined_comparison.png"):
+    """
+    在同一坐标系中绘制多个模型的净值曲线
+
+    Args:
+        equity_data: dict, {model_name: equity_series}
+        out_dir: str, 输出目录
+        title: str, 图表标题
+        output_name: str, 输出文件名
+    """
+    os.makedirs(out_dir, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # 定义颜色方案
+    color_map = {
+        "soft_sh_sz": "tab:blue",
+        "two_stage": "tab:red",
+        "soft_sh": "tab:green",
+        "soft_sz": "tab:orange",
+    }
+
+    # 绘制每条曲线
+    for name, equity in equity_data.items():
+        color = color_map.get(name, None)
+        equity.plot(ax=ax, label=name, color=color)
+
+    ax.set_title(title)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Equity")
+    ax.legend(loc="upper left")
+    ax.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    output_path = os.path.join(out_dir, output_name)
+    fig.savefig(output_path, dpi=160)
+    plt.close(fig)
+    print(f"保存对比图: {output_path}")
 
 def main():
     # 所有模型逐股票预测 CSV
@@ -319,6 +366,13 @@ def main():
     soft_sh_pred_csv = r"d:\ECNU\大创\models\soft_sh_predictions_oos.csv"
     soft_sz_pred_csv = r"d:\ECNU\大创\models\soft_sz_predictions_oos.csv"
     soft_pred_csv = r"d:\ECNU\大创\models\soft_transfer_predictions_oos.csv"  # 双市场
+    two_stage_pred_csv = r"d:\ECNU\大创\models\two_stage_predictions_oos.csv"  # 两阶段估计
+
+    # 存储用于对比的净值曲线
+    comparison_equity = {}
+
+    # 确保 plots 目录存在
+    os.makedirs(PLOTS_DIR, exist_ok=True)
 
     for name, pred_csv in [
         ("baseline_bj", baseline_pred_csv),
@@ -328,6 +382,7 @@ def main():
         ("soft_sh", soft_sh_pred_csv),
         ("soft_sz", soft_sz_pred_csv),
         ("soft_sh_sz", soft_pred_csv),  # 双市场
+        ("two_stage", two_stage_pred_csv),  # 两阶段估计
     ]:
         if not os.path.isfile(pred_csv):
             print(f"[WARN] 未找到预测文件: {pred_csv}")
@@ -361,7 +416,7 @@ def main():
         ax.set_xlabel("pred")
         ax.set_ylabel("real_return")
         fig.tight_layout()
-        scatter_path = os.path.join(OUTPUT_DIR, f"{name}_pred_vs_real_scatter.png")
+        scatter_path = os.path.join(PLOTS_DIR, f"{name}_pred_vs_real_scatter.png")
         fig.savefig(scatter_path, dpi=160)
         plt.close(fig)
         print(f"保存散点图: {scatter_path}")
@@ -388,7 +443,19 @@ def main():
         print(f"{name} 回测指标：")
         for k, v in metrics.items():
             print(f"- {k}: {v}")
-        save_report(metrics, equity, drawdown, OUTPUT_DIR, f"{name}_{STRATEGY_COL}", market_equity=market_equity)
+        save_report(metrics, equity, drawdown, OUTPUT_DIR, f"{name}_{STRATEGY_COL}", market_equity=market_equity, plots_dir=PLOTS_DIR)
+
+        # 存储净值曲线用于对比
+        comparison_equity[name] = equity
+
+    # 生成软迁移 vs 两阶段估计对比图
+    if "soft_sh_sz" in comparison_equity and "two_stage" in comparison_equity:
+        plot_combined_equity_curves(
+            {"soft_sh_sz": comparison_equity["soft_sh_sz"], "two_stage": comparison_equity["two_stage"]},
+            PLOTS_DIR,
+            title="软迁移 vs 两阶段估计 - 净值曲线对比",
+            output_name="soft_vs_two_stage_comparison.png"
+        )
 
 if __name__ == "__main__":
     main()

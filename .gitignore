@@ -26,7 +26,8 @@ wheels/
 # Data files - generated
 data/processed/*
 output/*
-models/
+output/models/*
+output/plots/*
 processed_data/
 
 # IDE
