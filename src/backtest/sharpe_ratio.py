@@ -3,7 +3,9 @@ import math
 import pandas as pd
 import numpy as np
 
-MODELS_DIR = r"d:\ECNU\大创\models"
+# 获取项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODELS_DIR = os.path.join(BASE_DIR, "output", "models")
 MONTHLY_FILES = {
     "hard_transfer_elasticnet": os.path.join(MODELS_DIR, "hard_transfer_elasticnet_monthly_returns.csv"),
     "soft_transfer_genet": os.path.join(MODELS_DIR, "soft_transfer_genet_monthly_returns.csv"),

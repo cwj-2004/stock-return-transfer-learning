@@ -2,7 +2,10 @@ import os
 import math
 import pandas as pd
 import numpy as np
+import sys
 
+# 添加父目录到路径以导入backtest模块
+sys.path.insert(0, os.path.dirname(__file__))
 from backtest import (
     load_predictions,
     merge_real_returns_to_predictions,
@@ -10,7 +13,9 @@ from backtest import (
     CODE_MAP_TXT_PATH,
 )
 
-MODELS_DIR = r"d:\ECNU\stock-return-transfer-learning\output\models"
+# 获取项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODELS_DIR = os.path.join(BASE_DIR, "output", "models")
 
 PRED_FILES = {
     "hard_transfer_elasticnet": os.path.join(MODELS_DIR, "hard_transfer_predictions_oos.csv"),
@@ -119,8 +124,8 @@ def build_decile_portfolios(
             })
 
         if return_portfolio:
-            for _, r in g.iterrows():
-                d = int(r["decile"])
+            for _, row in g.iterrows():
+                d = int(row["decile"])
                 if d == 1:
                     side = "short"       # 经典 long-short: D10 做多, D1 做空
                 elif d == n_deciles:
@@ -129,11 +134,11 @@ def build_decile_portfolios(
                     side = "neutral"
                 portfolio_rows.append({
                     "date": ym.to_timestamp("M"),
-                    "Stkcd": str(r["Stkcd"]),
+                    "Stkcd": str(row["Stkcd"]),
                     "decile": d,
                     "side": side,
-                    "pred": float(r["pred"]),
-                    "return": float(r["return"]),
+                    "pred": float(row["pred"]),
+                    "return": float(row["return"]),
                 })
 
     if not rows:

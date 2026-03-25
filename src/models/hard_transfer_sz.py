@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from tuning import tune_elasticnet_ts, extract_hard_transfer_params
 
 # 使用当前目录下的processed_data.pkl
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PKL_PATH = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
 SAVE_DIR = os.path.join(BASE_DIR, "output", "models")

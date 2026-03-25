@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from tuning import tune_elasticnet_ts, extract_hard_transfer_params
 
 # 获取项目根目录
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PKL_PATH = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
 SAVE_DIR = os.path.join(BASE_DIR, "output", "models")
@@ -69,12 +69,19 @@ print(f"调参结果已保存到: {results_path}")
 print(f"基线模型参数已保存到: {theta_path}")
 print(f"模型与参数已保存到: {SAVE_DIR}")
 
-# 在北交所测试集上评估（特征列对齐后直接用管线预测）
+# 在北交所测试集上评估（特征列对齐：仅使用共同特征）
 X_bj_test = data['X_target_test'].copy()
 y_bj_test = data['y_target_test']
-for col in X_target_train.columns:
-    if col not in X_bj_test.columns:
-        X_bj_test[col] = 0.0
+
+# 使用源域和目标域的交集特征
+common_cols = [col for col in X_target_train.columns if col in X_bj_test.columns]
+if len(common_cols) < len(X_target_train.columns):
+    print(f"[WARN] 目标域缺少 {len(X_target_train.columns) - len(common_cols)} 个特征")
+    print(f"  缺失特征: {[col for col in X_target_train.columns if col not in X_bj_test.columns]}")
+    print(f"  这些特征将被填充0（假设已标准化）")
+    for col in X_target_train.columns:
+        if col not in X_bj_test.columns:
+            X_bj_test[col] = 0.0
 X_bj_test = X_bj_test[X_target_train.columns]
 
 valid_mask = X_bj_test.notna().all(axis=1) & y_bj_test.notna()

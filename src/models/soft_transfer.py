@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from genet import GENet, load_theta0_vector, soft_genet_grid_search, align_columns_like
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PROCESSED_PKL = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
 MODELS_DIR = os.path.join(BASE_DIR, "output", "models")

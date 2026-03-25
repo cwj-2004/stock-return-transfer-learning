@@ -34,7 +34,7 @@ def read_all_csv_in(dir_path: str) -> pd.DataFrame:
     return pd.concat(dfs, axis=0, ignore_index=True)
 
 # === 配置路径 ===
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, "data", "raw", "latest_data")  # 存放最新数据目录
 OUTPUT_PATH = os.path.join("data", "processed", "processed_data.pkl")
 TEST_SPLIT_DATE = "2023-01-01"  # 北交所测试集分割日期
@@ -220,9 +220,9 @@ def apply_code_mapping(df: pd.DataFrame, map_df: pd.DataFrame | None) -> pd.Data
 
 def align_real_returns_same(target_info: pd.DataFrame, real_df: pd.DataFrame) -> pd.Series:
     ti = target_info.copy()
-    ti["Stkcd"] = ti["Stkcd"].astype(str).str.replace("\\D", "", regex=True).str.zfill(6)
+    ti["Stkcd"] = ti["Stkcd"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
     real_df = real_df.copy()
-    real_df["Stkcd"] = real_df["Stkcd"].astype(str).str.replace("\\D", "", regex=True).str.zfill(6)
+    real_df["Stkcd"] = real_df["Stkcd"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
     ti["Date_me"] = pd.to_datetime(ti["Date"]).dt.to_period("M").dt.to_timestamp("M")
     merged = ti.merge(real_df, left_on=["Stkcd", "Date_me"], right_on=["Stkcd", "Date"], how="left")
     return merged["real_return"].reset_index(drop=True)
@@ -293,20 +293,37 @@ def generate_processed_data(data_dir=DATA_DIR, output_path=OUTPUT_PATH, split_da
     df_sz_orig = df_sz_monthly.copy()
     df_bj_orig = df_bj_monthly.copy()
 
-    # === 时序对齐：生成下一期收益 & 特征滞后1个月 ===
-    print("— 使用同月标签，不生成下一期收益 —")
+    # === 时序对齐：生成下一期收益（t月特征预测t+1月收益）===
+    print("— 生成下一期收益作为标签 —")
+
+    # 为每个市场生成下一期收益
+    for df_name, df_monthly in [("沪市", df_sh_monthly), ("深市", df_sz_monthly), ("北交所", df_bj_monthly)]:
+        if df_monthly.empty:
+            continue
+        df_monthly = df_monthly.sort_values(["Stkcd", "Date"]).reset_index(drop=True)
+        # 下一期收益：t月特征预测t+1月收益
+        df_monthly["next_return"] = df_monthly.groupby("Stkcd")[TARGET_COLUMN].shift(-1)
+        # 标签改为下一期收益
+        df_monthly[TARGET_COLUMN] = df_monthly["next_return"]
+        df_monthly = df_monthly.drop(columns=["next_return"])
+
+        # 赋值回原变量
+        if df_name == "沪市":
+            df_sh_monthly = df_monthly
+        elif df_name == "深市":
+            df_sz_monthly = df_monthly
+        else:
+            df_bj_monthly = df_monthly
+
+    print("— 时序对齐完成：使用t月特征预测t+1月收益 —")
 
     # 剔除滞后/对齐产生的缺失值
-
     subset_sh = [c for c in (common_features + [TARGET_COLUMN]) if c in df_sh_monthly.columns]
     subset_sz = [c for c in (common_features + [TARGET_COLUMN]) if c in df_sz_monthly.columns]
     subset_bj = [c for c in (common_features + [TARGET_COLUMN]) if c in df_bj_monthly.columns]
     df_sh_monthly = df_sh_monthly.dropna(subset=subset_sh).reset_index(drop=True)
     df_sz_monthly = df_sz_monthly.dropna(subset=subset_sz).reset_index(drop=True)
     df_bj_monthly = df_bj_monthly.dropna(subset=subset_bj).reset_index(drop=True)
-
-    # 校验标签对齐
-    print("— 已移除下一期收益对齐校验（同月标签） —")
 
     # === 定义源域与目标域 ===
     df_source = pd.concat([df_sh_monthly, df_sz_monthly], axis=0, ignore_index=True)
@@ -398,7 +415,7 @@ def generate_processed_data(data_dir=DATA_DIR, output_path=OUTPUT_PATH, split_da
 
     print(f"[SUCCESS] 数据处理完成，文件已保存到: {output_path}")
     print(f"   特征维度: {len(common_features)}，测试集样本数: {len(X_target_test)}")
-    print("   标签定义: y = 当月收益（return）；真实收益同月对齐已保存。")
+    print("   标签定义: y = 下一期收益（t月特征预测t+1月收益）")
 
     return processed_data
 

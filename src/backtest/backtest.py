@@ -9,7 +9,7 @@ plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 # 获取项目根目录
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 CSV_PATH = os.path.join(BASE_DIR, "output", "models", "hard_transfer_elasticnet_monthly_returns.csv")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output", "models")
@@ -104,6 +104,17 @@ def load_real_monthly_returns(path: str = REAL_RETURNS_PATH) -> pd.DataFrame:
     return df
 
 def load_code_mapping_from_txt(txt_path: str = CODE_MAP_TXT_PATH) -> pd.DataFrame | None:
+    # 优先尝试加载CSV格式的代码映射
+    csv_path = os.path.join(BASE_DIR, "data", "raw", "code_mapping.csv")
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path)
+        if "old_code" in df.columns and "new_code" in df.columns:
+            df["old_code"] = df["old_code"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
+            df["new_code"] = df["new_code"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
+            print(f"[回测] 从CSV加载代码映射: {len(df)} 条")
+            return df
+
+    # 回退到txt格式
     if not os.path.exists(txt_path):
         return None
     rows = []
@@ -118,6 +129,7 @@ def load_code_mapping_from_txt(txt_path: str = CODE_MAP_TXT_PATH) -> pd.DataFram
     df = pd.DataFrame(rows, columns=["old_code", "new_code"]).drop_duplicates()
     df["old_code"] = df["old_code"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
     df["new_code"] = df["new_code"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
+    print(f"[回测] 从TXT加载代码映射: {len(df)} 条")
     return df
 
 def apply_code_mapping(df: pd.DataFrame, map_df: pd.DataFrame | None) -> pd.DataFrame:
@@ -139,14 +151,24 @@ def merge_real_returns_to_predictions(df_pred: pd.DataFrame,
                                       real_path: str = REAL_RETURNS_PATH,
                                       map_txt_path: str = CODE_MAP_TXT_PATH,
                                       shift_next: bool = True) -> pd.DataFrame:
-    map_df = load_code_mapping_from_txt(map_txt_path)
+    # 从统一的月度真实收益文件加载
     real_df = load_real_monthly_returns(real_path)
-    df_pred = normalize_stkcd_prefix(df_pred)
-    df_pred = apply_code_mapping(df_pred, map_df)
-    real_df = apply_code_mapping(real_df, map_df)
+
+    # 加载代码映射表（旧代码 -> 新代码）
+    map_df = load_code_mapping_from_txt(map_txt_path)
+
     df = df_pred.copy()
     df["Stkcd"] = df["Stkcd"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
     real_df["Stkcd"] = real_df["Stkcd"].astype(str).str.replace(r"\D", "", regex=True).str.zfill(6)
+
+    # 将预测文件的旧代码映射为新代码，以便与真实收益文件匹配
+    if map_df is not None:
+        mapping_dict = dict(zip(map_df["old_code"], map_df["new_code"]))
+        before_map = df["Stkcd"].unique()
+        df["Stkcd"] = df["Stkcd"].map(lambda x: mapping_dict.get(x, x))
+        mapped = df["Stkcd"].unique()
+        print(f"[回测] 代码映射: 原始 {len(before_map)} 个，映射后 {len(mapped)} 个")
+
     valid_codes = set(real_df["Stkcd"].unique())
     before = len(df)
     df = df[df["Stkcd"].isin(valid_codes)].copy()
@@ -396,7 +418,7 @@ def main():
             print(f"[WARN] 未找到预测文件: {pred_csv}")
             continue
         df_pred = load_predictions(pred_csv)
-        df_pred = merge_real_returns_to_predictions(df_pred, REAL_RETURNS_PATH, CODE_MAP_TXT_PATH, shift_next=False)
+        df_pred = merge_real_returns_to_predictions(df_pred, REAL_RETURNS_PATH, CODE_MAP_TXT_PATH, shift_next=True)
 
         x = df_pred["pred"].astype(float)
         y = df_pred["return"].astype(float)

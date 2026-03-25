@@ -8,7 +8,7 @@ from sklearn.metrics import r2_score, mean_squared_error
 import sys
 
 # 数据路径
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PKL_PATH = os.path.join(BASE_DIR, "data", "processed", "processed_data.pkl")
 SAVE_DIR = os.path.join(BASE_DIR, "output", "models")
@@ -31,6 +31,8 @@ X_source_sz = data.get('X_source_sz')
 y_source_sz = data.get('y_source_sz')
 
 # 目标域数据（北交所）
+X_target_train = data['X_target_train']
+y_target_train = data['y_target_train']
 X_target_test = data['X_target_test']
 y_target_test = data['y_target_test']
 
@@ -121,6 +123,32 @@ print("\n" + "=" * 50)
 print("第二阶段：北交所回归（仅全局因子）")
 print("=" * 50)
 
+# 对齐训练集特征
+X_bj_train = X_target_train[aligned_features]
+
+# 清洗训练集
+train_mask = X_bj_train.notna().all(axis=1) & y_target_train.notna()
+train_pos = np.where(train_mask.to_numpy().ravel())[0]
+X_bj_train_valid = X_bj_train.iloc[train_pos].copy()
+y_bj_train_valid = y_target_train.iloc[train_pos].copy()
+
+print(f"第二阶段训练数据: X shape={X_bj_train_valid.shape}, y shape={y_bj_train_valid.shape}")
+
+# 标准化训练集（使用全局标准化器）
+X_bj_train_scaled = global_scaler.transform(X_bj_train_valid)
+
+# 计算全局因子 F_global = X_bj · theta_G
+F_global_train = X_bj_train_scaled @ theta_G['coef_'] + theta_G['intercept_']
+print(f"全局因子 F_global (train): shape={F_global_train.shape}")
+
+# 第二阶段模型：用全局因子预测收益（简单线性回归）
+second_stage_model = LinearRegression()
+F_global_train_reshaped = F_global_train.reshape(-1, 1)
+second_stage_model.fit(F_global_train_reshaped, y_bj_train_valid)
+
+print(f"第二阶段系数: {second_stage_model.coef_[0]:.6f}")
+print(f"第二阶段截距: {second_stage_model.intercept_:.6f}")
+
 # 对齐测试集特征
 X_bj_test = X_target_test[aligned_features]
 
@@ -135,20 +163,13 @@ print(f"第二阶段测试数据: X shape={X_bj_test_valid.shape}, y shape={y_bj
 # 标准化测试集（使用全局标准化器）
 X_bj_test_scaled = global_scaler.transform(X_bj_test_valid)
 
-# 计算全局因子 F_global = X_bj · theta_G
+# 计算测试集的全局因子
 F_global_test = X_bj_test_scaled @ theta_G['coef_'] + theta_G['intercept_']
-print(f"全局因子 F_global: shape={F_global_test.shape}")
-
-# 第二阶段模型：用全局因子预测收益（简单线性回归）
-second_stage_model = LinearRegression()
-F_global_train_reshaped = F_global_test.reshape(-1, 1)
-second_stage_model.fit(F_global_train_reshaped, y_bj_test_valid)
-
-print(f"第二阶段系数: {second_stage_model.coef_[0]:.6f}")
-print(f"第二阶段截距: {second_stage_model.intercept_:.6f}")
+print(f"全局因子 F_global (test): shape={F_global_test.shape}")
 
 # 最终预测
-y_pred = second_stage_model.predict(F_global_train_reshaped)
+F_global_test_reshaped = F_global_test.reshape(-1, 1)
+y_pred = second_stage_model.predict(F_global_test_reshaped)
 
 # ========================================
 # 模型评估
