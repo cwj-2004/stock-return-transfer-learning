@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import ElasticNet, LinearRegression
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import mean_squared_error
 import sys
 
 # 数据路径
@@ -100,10 +100,6 @@ y_global_series = pd.Series(y_global.values if isinstance(y_global, pd.Series) e
 best_estimator, best_params, cv_results = tune_elasticnet_ts(
     pd.DataFrame(X_global_scaled, columns=X_global.columns),  # 转为DataFrame
     y_global_series,
-    n_splits=10,
-    min_train_years=3,
-    verbose=1,
-    scoring="r2",
 )
 
 print("第一阶段最优超参数:")
@@ -178,10 +174,8 @@ print("\n" + "=" * 50)
 print("模型评估结果")
 print("=" * 50)
 
-r2 = r2_score(y_bj_test_valid, y_pred)
 mse = mean_squared_error(y_bj_test_valid, y_pred)
 
-print(f"样本外 R2: {r2:.6f}")
 print(f"MSE: {mse:.6f}")
 
 # ========================================

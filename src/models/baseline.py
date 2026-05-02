@@ -1,7 +1,7 @@
 import os
 import joblib
 import pandas as pd
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import mean_squared_error
 import numpy as np
 import sys
 
@@ -41,13 +41,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from tuning import tune_elasticnet_ts, extract_hard_transfer_params
 
-# 十折时间序列调参（无日期索引时自动回退到样本顺序 TimeSeriesSplit）
+# 使用调参工具（北交所数据量小，调整min_train_years）
 best_estimator, best_params, cv_results = tune_elasticnet_ts(
     X_target_train, y_target_train,
-    n_splits=10,
-    min_train_years=1,  # 北交所数据量小，最少训练年数设为1
-    verbose=1,
-    scoring="r2",
+    min_train_years=1,  # 北交所数据量小，设为1
 )
 # 打印最优超参数
 print("最优超参数:")
@@ -91,11 +88,9 @@ X_bj_test_valid = X_bj_test.iloc[valid_pos].copy()
 y_bj_test_valid = y_bj_test.iloc[valid_pos].copy()
 
 y_pred_bj = best_estimator.predict(X_bj_test_valid)
-r2_bj = r2_score(y_bj_test_valid, y_pred_bj)
 mse_bj = mean_squared_error(y_bj_test_valid, y_pred_bj)
 print("-" * 40)
 print("Baseline（仅北交所数据）表现:")
-print(f" - OOS R2: {r2_bj:.6f}")
 print(f" - MSE: {mse_bj:.6f}")
 print("-" * 40)
 info = data["target_test_info"].copy()

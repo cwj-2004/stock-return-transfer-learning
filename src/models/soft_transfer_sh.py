@@ -2,7 +2,7 @@ import os
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import mean_squared_error
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
@@ -59,7 +59,6 @@ def main():
     y_bj_test_valid = y_bj_test.iloc[valid_pos].copy()
 
     y_pred_bj_soft = soft_model.predict(X_bj_test_valid)
-    r2_bj_soft = r2_score(y_bj_test_valid, y_pred_bj_soft)
     mse_bj_soft = mean_squared_error(y_bj_test_valid, y_pred_bj_soft)
 
     # 保存软迁移模型
@@ -77,7 +76,7 @@ def main():
 
     print("Soft transfer (GENet) — 沪市 — 最优参数：")
     print(f"  v={soft_best['v']}, alpha={soft_best['alpha']}, l1_ratio={soft_best['l1_ratio']}, CV R2={soft_best['score']:.6f}")
-    print(f"Soft transfer on BJ — R2: {r2_bj_soft:.6f}, MSE: {mse_bj_soft:.6f}")
+    print(f"Soft transfer on BJ — MSE: {mse_bj_soft:.6f}")
     print(f"模型已保存到: {SOFT_MODEL_PATH}")
     info = data["target_test_info"].copy()
     info_valid = info.iloc[valid_pos].copy()

@@ -17,6 +17,26 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import TimeSeriesSplit
 
+# === 统一的调参配置 ===
+TUNING_CONFIG = {
+    # 默认参数网格
+    "param_grid": {
+        "elasticnet__alpha": [0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
+        "elasticnet__l1_ratio": [0.1, 0.3, 0.5, 0.7, 0.9],
+    },
+    # 默认评估指标（MSE）
+    "scoring": "neg_mean_squared_error",
+    # 默认交叉验证折数
+    "n_splits": 10,
+    # 默认最少训练年数
+    "min_train_years": 3,
+    # 其他默认参数
+    "n_jobs": 1,
+    "max_iter": 5000,
+    "random_state": 42,
+    "verbose": 1,
+}
+
 class YearlyExpandingCV:
     """
     按年份逐步扩展训练集的时间序列交叉验证：
@@ -82,12 +102,12 @@ def tune_elasticnet_ts(
     X: pd.DataFrame,
     y: pd.Series,
     param_grid: Optional[Dict[str, Any]] = None,
-    scoring: str = "neg_mean_squared_error",
-    n_jobs: int = 1,
-    max_iter: int = 5000,
-    min_train_years: int = 3,
-    random_state: int = 42,
-    verbose: int = 1,
+    scoring: str = None,
+    n_jobs: int = None,
+    max_iter: int = None,
+    min_train_years: int = None,
+    random_state: int = None,
+    verbose: int = None,
     n_splits: Optional[int] = None,
 ) -> Tuple[Pipeline, Dict[str, Any], Dict[str, Any]]:
     """
@@ -96,23 +116,35 @@ def tune_elasticnet_ts(
     参数
     - X: DataFrame，要求 index 为 DatetimeIndex，行与 y 对齐
     - y: Series，目标值（如 'return'）
-    - param_grid: 网格搜索空间，默认：
-        {
-            'elasticnet__alpha': [0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
-            'elasticnet__l1_ratio': [0.1, 0.3, 0.5, 0.7, 0.9]
-        }
-    - scoring: 评分指标（默认 MSE 的相反数）
-    - n_jobs: 并行数（建议 1，避免内存复制开销）
-    - max_iter: ElasticNet 最大迭代次数
-    - min_train_years: 最少训练年数
-    - random_state: 随机种子
-    - verbose: GridSearchCV 的日志等级
+    - param_grid: 网格搜索空间，默认使用 TUNING_CONFIG["param_grid"]
+    - scoring: 评分指标，默认使用 TUNING_CONFIG["scoring"]
+    - n_splits: 交叉验证折数，默认使用 TUNING_CONFIG["n_splits"]
+    - min_train_years: 最少训练年数，默认使用 TUNING_CONFIG["min_train_years"]
+    - 其他参数：默认使用 TUNING_CONFIG 中的值
 
     返回
     - best_estimator: 最优管线（StandardScaler + ElasticNet）
     - best_params: 最优超参数
     - cv_results: 完整 CV 结果字典（便于分析）
     """
+    # 使用默认配置，但允许覆盖
+    config = TUNING_CONFIG.copy()
+    if param_grid is not None:
+        config["param_grid"] = param_grid
+    if scoring is not None:
+        config["scoring"] = scoring
+    if n_jobs is not None:
+        config["n_jobs"] = n_jobs
+    if max_iter is not None:
+        config["max_iter"] = max_iter
+    if min_train_years is not None:
+        config["min_train_years"] = min_train_years
+    if random_state is not None:
+        config["random_state"] = random_state
+    if verbose is not None:
+        config["verbose"] = verbose
+    if n_splits is not None:
+        config["n_splits"] = n_splits
 
     # 丢弃缺失行，保持对齐
     aligned = pd.concat([X, y.rename("__y__")], axis=1)
@@ -120,35 +152,28 @@ def tune_elasticnet_ts(
     X_clean = aligned.drop(columns=["__y__"])
     y_clean = aligned["__y__"]
 
-    # 默认搜索空间
-    if param_grid is None:
-        param_grid = {
-            "elasticnet__alpha": [0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
-            "elasticnet__l1_ratio": [0.1, 0.3, 0.5, 0.7, 0.9],
-        }
-
     # 管线：标准化 + ElasticNet
     pipe = Pipeline(
         steps=[
             ("scaler", StandardScaler()),
-            ("elasticnet", ElasticNet(max_iter=max_iter, random_state=random_state)),
+            ("elasticnet", ElasticNet(max_iter=config["max_iter"], random_state=config["random_state"])),
         ]
     )
 
     # 根据索引类型选择 CV：有 DatetimeIndex 用逐年扩展，否则回退到样本顺序十折
     if isinstance(X_clean.index, pd.DatetimeIndex):
-        cv = YearlyExpandingCV(min_train_years=min_train_years, n_splits=n_splits)
+        cv = YearlyExpandingCV(min_train_years=config["min_train_years"], n_splits=config["n_splits"])
     else:
-        cv = TimeSeriesSplit(n_splits=n_splits or 10)
+        cv = TimeSeriesSplit(n_splits=config["n_splits"] or 10)
 
     grid = GridSearchCV(
         estimator=pipe,
-        param_grid=param_grid,
-        scoring=scoring,
+        param_grid=config["param_grid"],
+        scoring=config["scoring"],
         cv=cv,
-        n_jobs=n_jobs,
+        n_jobs=config["n_jobs"],
         refit=True,
-        verbose=verbose,
+        verbose=config["verbose"],
         return_train_score=True,
     )
     grid.fit(X_clean, y_clean)
@@ -157,6 +182,22 @@ def tune_elasticnet_ts(
     best_params: Dict[str, Any] = grid.best_params_
     cv_results: Dict[str, Any] = grid.cv_results_
     return best_estimator, best_params, cv_results
+
+
+def tune_elasticnet_simple(X: pd.DataFrame, y: pd.Series, **kwargs) -> Tuple[Pipeline, Dict[str, Any]]:
+    """
+    简化版调参：使用默认配置，只返回最优模型和参数（不返回cv_results）
+
+    参数
+    - X, y: 训练数据
+    - **kwargs: 可覆盖的配置参数（如 min_train_years, n_splits 等）
+
+    返回
+    - best_estimator: 最优模型
+    - best_params: 最优参数
+    """
+    best_estimator, best_params, _ = tune_elasticnet_ts(X, y, **kwargs)
+    return best_estimator, best_params
 
 
 def extract_hard_transfer_params(model: Pipeline, feature_names: Optional[list] = None) -> Dict[str, Any]:
