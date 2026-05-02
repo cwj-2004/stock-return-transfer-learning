@@ -125,14 +125,6 @@ python tests/test_genet_alignment.py
 - `output/plots/*_decile_long_short_equity_curve.png` - 净值曲线（包含市场对比）
 - `output/plots/decile_comparison.png` - 方法对比图（含市场基准）
 
-## 文档
-
-- **[QUICK_START.md](QUICK_START.md)** - GENet 快速使用指南
-- **[GENET_ALIGNMENT.md](GENET_ALIGNMENT.md)** - GENet 论文对齐说明
-- **[METHOD_COMPARISON.md](METHOD_COMPARISON.md)** - 方法对比研究
-- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - 项目完整总结
-- **[CODE_MAPPING_README.md](CODE_MAPPING_README.md)** - 代码映射工具说明
-
 ## 核心方法说明
 
 ### 1. Baseline（基线模型）
