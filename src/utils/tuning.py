@@ -6,6 +6,8 @@ ElasticNet 时间序列超参数调优工具
 - 网格搜索：alpha 与 l1_ratio
 """
 
+import os
+import sys
 from typing import Dict, Any, Optional, Tuple
 import numpy as np
 import pandas as pd
@@ -13,16 +15,22 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import ElasticNet
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.base import BaseEstimator
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_squared_error, r2_score
 
 # === 统一的调参配置 ===
 TUNING_CONFIG = {
-    # 默认参数网格
+    # 默认参数网格（ElasticNet）
     "param_grid": {
         "elasticnet__alpha": [0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
         "elasticnet__l1_ratio": [0.1, 0.3, 0.5, 0.7, 0.9],
+    },
+    # GENet 参数网格
+    "genet_grid": {
+        "v": [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9],
+        "alpha": list(np.logspace(-4, 1, 10)),
+        "l1_ratio": [0.1, 0.5, 0.9, 1.0],
     },
     # 默认评估指标（MSE）
     "scoring": "neg_mean_squared_error",
@@ -219,3 +227,78 @@ def extract_hard_transfer_params(model: Pipeline, feature_names: Optional[list] 
         "feature_names": feature_names if feature_names is not None else None,
     }
     return params
+
+
+def tune_genet(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    theta0_vec: np.ndarray,
+    v_grid: Optional[list] = None,
+    alpha_grid: Optional[list] = None,
+    l1_grid: Optional[list] = None,
+    n_splits: int = None,
+    metric: str = "mse",
+) -> Tuple[Any, Dict[str, Any]]:
+    """
+    GENet 网格搜索超参数调优（使用统一配置）
+
+    Parameters:
+    - X_train: 训练特征
+    - y_train: 训练目标
+    - theta0_vec: 源域参数 θ₀
+    - v_grid: v 参数搜索网格，默认使用 TUNING_CONFIG["genet_grid"]["v"]
+    - alpha_grid: alpha 参数搜索网格，默认使用 TUNING_CONFIG["genet_grid"]["alpha"]
+    - l1_grid: l1_ratio 参数搜索网格，默认使用 TUNING_CONFIG["genet_grid"]["l1_ratio"]
+    - n_splits: 交叉验证折数，默认使用 TUNING_CONFIG["n_splits"]
+    - metric: 评估指标 ("mse" 或 "r2")，默认使用 MSE
+
+    Returns:
+    - final: 最优 GENet 模型
+    - best: 最优参数和分数 {"v", "alpha", "l1_ratio", "score"}
+    """
+    # 使用默认配置
+    config = TUNING_CONFIG.copy()
+    grid = config["genet_grid"]
+
+    if v_grid is None:
+        v_grid = grid["v"]
+    if alpha_grid is None:
+        alpha_grid = grid["alpha"]
+    if l1_grid is None:
+        l1_grid = grid["l1_ratio"]
+    if n_splits is None:
+        n_splits = config["n_splits"]
+
+    # 使用绝对导入
+    _dir = os.path.dirname(os.path.abspath(__file__))
+    if _dir not in sys.path:
+        sys.path.insert(0, _dir)
+    from genet import GENet
+
+    ts = TimeSeriesSplit(n_splits=n_splits)
+    # MSE 越小越好；R² 越大越好
+    best = {"score": np.inf if metric == "mse" else -np.inf, "v": None, "alpha": None, "l1_ratio": None}
+
+    for v in v_grid:
+        for alpha in alpha_grid:
+            for l1 in l1_grid:
+                scores = []
+                for tr_idx, va_idx in ts.split(np.arange(len(X_train))):
+                    X_tr, X_va = X_train.iloc[tr_idx], X_train.iloc[va_idx]
+                    y_tr, y_va = y_train.iloc[tr_idx], y_train.iloc[va_idx]
+                    model = GENet(v=v, alpha=alpha, l1_ratio=l1)
+                    model.fit(X_tr, y_tr, theta0_vec)
+                    y_hat = model.predict(X_va)
+                    if metric == "mse":
+                        scores.append(mean_squared_error(y_va, y_hat))
+                    else:
+                        scores.append(r2_score(y_va, y_hat))
+                mean_score = float(np.mean(scores))
+                is_better = (metric == "mse" and mean_score < best["score"]) or (metric == "r2" and mean_score > best["score"])
+                if is_better:
+                    best.update({"score": mean_score, "v": v, "alpha": alpha, "l1_ratio": l1})
+
+    # 用最优参数拟合全训练集
+    final = GENet(v=best["v"], alpha=best["alpha"], l1_ratio=best["l1_ratio"])
+    final.fit(X_train, y_train, theta0_vec)
+    return final, best

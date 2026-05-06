@@ -15,8 +15,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 CSV_PATH = os.path.join(BASE_DIR, "output", "models", "hard_transfer_elasticnet_monthly_returns.csv")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output", "models")
 PLOTS_DIR = os.path.join(BASE_DIR, "output", "plots")
-STRATEGY_COL = "long_short_ret"
-RF_ANNUAL = 0.0
+STRATEGY_COL = "long_short_ret"  # 策略收益列名
+RF_ANNUAL = 0.0  # 年化无风险利率
 REAL_RETURNS_PATH = os.path.join(BASE_DIR, "data", "raw", "TRD_Mnth.csv")
 CODE_MAP_TXT_PATH = os.path.join(BASE_DIR, "data", "raw", "对照.txt")
 
@@ -347,10 +347,38 @@ def build_decile_long_short_returns(df_pred: pd.DataFrame,
     ret_df = ret_df.sort_values("date").reset_index(drop=True)
     return ret_df
 
-def compute_metrics(ret: pd.Series, rf_annual: float = 0.0) -> dict:
+def compute_metrics(ret: pd.Series, rf_annual: float = 0.0) -> tuple:
+    """
+    计算回测指标
+
+    Args:
+        ret: 月度收益率序列
+        rf_annual: 年化无风险利率
+
+    Returns:
+        tuple: (metrics_dict, equity_series, drawdown_series)
+        当数据为空时返回默认值（全NaN）和空序列
+    """
     n = ret.shape[0]
     if n == 0:
-        raise ValueError("无有效收益数据。")
+        # 返回默认值而非抛出异常，便于调用方处理
+        empty_equity = pd.Series([], dtype=float)
+        empty_drawdown = pd.Series([], dtype=float)
+        default_metrics = {
+            "start_date": None,
+            "end_date": None,
+            "months": 0,
+            "total_return": np.nan,
+            "annual_return": np.nan,
+            "mean_return_annual": np.nan,
+            "vol_annual": np.nan,
+            "win_rate": np.nan,
+            "t_stat": np.nan,
+            "sharpe": np.nan,
+            "max_drawdown": np.nan,
+            "calmar": np.nan,
+        }
+        return default_metrics, empty_equity, empty_drawdown
     # 累计净值曲线（从1.0开始）
     initial_equity = pd.Series([1.0], index=[ret.index[0] - pd.offsets.MonthEnd(1)])
     equity = pd.concat([initial_equity, (1.0 + ret).cumprod()])
@@ -647,7 +675,9 @@ def main():
     soft_sh_pred_csv = os.path.join(models_dir, "soft_sh_predictions_oos.csv")
     soft_sz_pred_csv = os.path.join(models_dir, "soft_sz_predictions_oos.csv")
     soft_pred_csv = os.path.join(models_dir, "soft_transfer_predictions_oos.csv")  # 双市场
-    two_stage_pred_csv = os.path.join(models_dir, "two_stage_predictions_oos.csv")  # 两阶段估计
+    two_stage_sh_pred_csv = os.path.join(models_dir, "two_stage_sh_predictions_oos.csv")  # 两阶段沪市
+    two_stage_sz_pred_csv = os.path.join(models_dir, "two_stage_sz_predictions_oos.csv")  # 两阶段深市
+    two_stage_sh_sz_pred_csv = os.path.join(models_dir, "two_stage_sh_sz_predictions_oos.csv")  # 两阶段合并
 
     # 存储用于对比的净值曲线
     comparison_equity_decile = {}
@@ -664,7 +694,9 @@ def main():
         ("soft_sh", soft_sh_pred_csv),
         ("soft_sz", soft_sz_pred_csv),
         ("soft_sh_sz", soft_pred_csv),  # 双市场
-        ("two_stage", two_stage_pred_csv),  # 两阶段估计
+        ("two_stage_sh", two_stage_sh_pred_csv),  # 两阶段沪市
+        ("two_stage_sz", two_stage_sz_pred_csv),  # 两阶段深市
+        ("two_stage_sh_sz", two_stage_sh_sz_pred_csv),  # 两阶段合并
     ]:
         if not os.path.isfile(pred_csv):
             print(f"\n[WARN] 未找到预测文件: {pred_csv}")
@@ -728,6 +760,11 @@ def main():
             if not ret_decile.empty:
                 ret_decile.index = pd.to_datetime(monthly_ret_decile.loc[ret_decile.index, "date"])
                 metrics_decile, equity_decile, drawdown_decile = compute_metrics(ret_decile, RF_ANNUAL)
+
+                # 检查指标是否有效（数据量足够）
+                if metrics_decile["months"] == 0 or pd.isna(metrics_decile["annual_return"]):
+                    print(f"[WARN] {name} 有效数据不足，跳过回测指标计算")
+                    continue
 
                 # 计算 FF Alpha
                 if ff_factors is not None:

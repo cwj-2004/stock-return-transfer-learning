@@ -15,16 +15,16 @@ from typing import Optional, Tuple
 
 
 # === 配置路径 ===
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_DIR = os.path.join(BASE_DIR, "data", "raw", "latest_data")
-OUTPUT_PATH = os.path.join("data", "processed", "processed_data.pkl")
-TEST_SPLIT_DATE = "2023-01-01"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根目录
+DATA_DIR = os.path.join(BASE_DIR, "data", "raw", "latest_data")  # 原始数据目录
+OUTPUT_PATH = os.path.join("data", "processed", "processed_data.pkl")  # 处理后数据输出路径
+TEST_SPLIT_DATE = "2023-01-01"  # 训练/测试集划分日期
 REAL_RETURNS_PATH = os.path.join(BASE_DIR, "data", "raw", "TRD_Mnth.csv")
 CODE_MAP_TXT_PATH = os.path.join(BASE_DIR, "data", "raw", "对照.txt")
 
 # === 关键列名 ===
-ID_COLUMNS = ["Stkcd", "Date"]
-TARGET_COLUMN = "return"
+ID_COLUMNS = ["Stkcd", "Date"]  # 股票代码和日期列
+TARGET_COLUMN = "return"  # 目标变量列名（收益率）
 
 
 # ==============================================================================
@@ -33,6 +33,7 @@ TARGET_COLUMN = "return"
 
 def load_market_csv(dir_path: str) -> pd.DataFrame:
     if not os.path.isdir(dir_path):
+        warnings.warn(f"数据目录不存在: {dir_path}，返回空数据")
         return pd.DataFrame(columns=ID_COLUMNS)
 
     dfs = []
@@ -112,9 +113,12 @@ def align_time_series(df: pd.DataFrame, target_col: str = None) -> pd.DataFrame:
 
     df = df.copy()
     df = df.sort_values(["Stkcd", "Date"]).reset_index(drop=True)
-    df["next_return"] = df.groupby("Stkcd")[target_col].shift(-1)
-    df[target_col] = df["next_return"]
-    df = df.drop(columns=["next_return"])
+    # 下一期收益作为当前期的 target（t月特征预测t+1月收益）
+    df["_next_target"] = df.groupby("Stkcd")[target_col].shift(-1)
+    df = df.dropna(subset=["_next_target"])
+    # 用新列替换原target列（避免覆盖原始数据）
+    df[target_col] = df["_next_target"].astype(float)
+    df = df.drop(columns=["_next_target"])
 
     return df
 
@@ -277,6 +281,8 @@ def split_target_domain(df: pd.DataFrame, split_date: str) -> Tuple[pd.DataFrame
 
 def extract_model_data(
     df_source: pd.DataFrame,
+    df_source_sh: pd.DataFrame,
+    df_source_sz: pd.DataFrame,
     df_target_train: pd.DataFrame,
     df_target_test: pd.DataFrame,
     feature_cols: list
@@ -284,6 +290,10 @@ def extract_model_data(
     return {
         "X_source": df_source[feature_cols],
         "y_source": df_source[TARGET_COLUMN],
+        "X_source_sh": df_source_sh[feature_cols],
+        "y_source_sh": df_source_sh[TARGET_COLUMN],
+        "X_source_sz": df_source_sz[feature_cols],
+        "y_source_sz": df_source_sz[TARGET_COLUMN],
         "X_target_train": df_target_train[feature_cols],
         "y_target_train": df_target_train[TARGET_COLUMN],
         "X_target_test": df_target_test[feature_cols],
@@ -345,14 +355,16 @@ def generate_processed_data(
 
     # 6. 定义源域和目标域
     df_source = pd.concat([df_sh_monthly, df_sz_monthly], axis=0, ignore_index=True)
+    df_source_sh = df_sh_monthly
+    df_source_sz = df_sz_monthly
     df_target = df_bj_monthly
 
     # 7. 划分训练/测试集
     df_target_train, df_target_test = split_target_domain(df_target, split_date)
-    print(f"源域: {len(df_source)}, 目标域训练: {len(df_target_train)}, 测试: {len(df_target_test)}")
+    print(f"源域(合并): {len(df_source)}, 源域(沪市): {len(df_source_sh)}, 源域(深市): {len(df_source_sz)}, 目标域训练: {len(df_target_train)}, 测试: {len(df_target_test)}")
 
     # 8. 提取模型数据
-    model_data = extract_model_data(df_source, df_target_train, df_target_test, common_features)
+    model_data = extract_model_data(df_source, df_source_sh, df_source_sz, df_target_train, df_target_test, common_features)
 
     # 9. 提取元信息
     train_info, test_info = extract_meta_info(df_target_train, df_target_test)

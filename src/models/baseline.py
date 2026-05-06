@@ -36,11 +36,6 @@ elif 'Date' in X_target_train.columns:
     y_target_train = y_target_train.loc[X_target_train.index]
 # 否则直接用当前索引，调参工具会自动回退到样本顺序十折
 
-# 加载调参工具（使用项目内的 tuning 模块）
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
-from tuning import tune_elasticnet_ts, extract_hard_transfer_params
-
 # 使用调参工具（北交所数据量小，调整min_train_years）
 best_estimator, best_params, cv_results = tune_elasticnet_ts(
     X_target_train, y_target_train,

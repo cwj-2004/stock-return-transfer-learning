@@ -6,7 +6,8 @@ from sklearn.metrics import mean_squared_error
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
-from genet import GENet, load_theta0_vector, soft_genet_grid_search
+from genet import GENet, load_theta0_vector
+from tuning import tune_genet
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -42,14 +43,10 @@ def main():
 
     theta0_vec = load_theta0_vector(THETA_HARD_PATH, aligned_features)
 
-    # 网格调参：v探索范围，alpha 取 logspace，使用 R^2 指标
-    v_grid = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
-    alpha_grid = np.logspace(-4, 1, 10)
-    l1_grid = [0.1, 0.5, 0.9, 1.0]
-    soft_model, soft_best = soft_genet_grid_search(
+    # 使用统一调参配置（默认 MSE）
+    soft_model, soft_best = tune_genet(
         X_bj_train_aligned, y_bj_train, theta0_vec,
-        v_grid=v_grid, alpha_grid=alpha_grid, l1_grid=l1_grid,
-        n_splits=10, metric="r2"
+        n_splits=10, metric="mse"
     )
 
     # 对齐测试集列并评估
@@ -75,7 +72,7 @@ def main():
     }, SOFT_MODEL_PATH)
 
     print("Soft transfer (GENet) — 深市 — 最优参数：")
-    print(f"  v={soft_best['v']}, alpha={soft_best['alpha']}, l1_ratio={soft_best['l1_ratio']}, CV R2={soft_best['score']:.6f}")
+    print(f"  v={soft_best['v']}, alpha={soft_best['alpha']:.4f}, l1_ratio={soft_best['l1_ratio']}, CV MSE={soft_best['score']:.6f}")
     print(f"Soft transfer on BJ — MSE: {mse_bj_soft:.6f}")
     print(f"模型已保存到: {SOFT_MODEL_PATH}")
     info = data["target_test_info"].copy()

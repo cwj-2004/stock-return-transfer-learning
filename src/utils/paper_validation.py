@@ -394,7 +394,3 @@ def calculate_predictive_r2(y_true: np.ndarray, y_pred: np.ndarray,
     """
     calculator = PredictiveR2(baseline=baseline)
     return calculator.calculate(y_true, y_pred, dates)
-
-
-import warnings
-from typing import Dict
