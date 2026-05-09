@@ -8,6 +8,7 @@ import sys
 # 加载调参工具（使用项目内的 tuning 模块）
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from tuning import tune_elasticnet_ts, extract_hard_transfer_params
+from paper_validation import calculate_predictive_r2
 
 # 使用当前目录下的processed_data.pkl
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -78,9 +79,11 @@ y_bj_test_valid = y_target_test.iloc[valid_pos].copy()
 
 y_pred_bj = best_estimator.predict(X_bj_test_valid)
 mse_bj = mean_squared_error(y_bj_test_valid, y_pred_bj)
+pred_r2_bj = calculate_predictive_r2(y_bj_test_valid.values, y_pred_bj, baseline="historical_mean")
 print("-" * 40)
 print("Hard Transfer（深市）迁移至北交所表现:")
 print(f" - MSE: {mse_bj:.6f}")
+print(f" - Predictive R2: {pred_r2_bj:.6f}")
 print("-" * 40)
 info = data["target_test_info"].copy()
 info_valid = info.iloc[valid_pos].copy()

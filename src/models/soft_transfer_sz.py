@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from genet import GENet, load_theta0_vector
 from tuning import tune_genet
+from paper_validation import calculate_predictive_r2
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -57,6 +58,7 @@ def main():
 
     y_pred_bj_soft = soft_model.predict(X_bj_test_valid)
     mse_bj_soft = mean_squared_error(y_bj_test_valid, y_pred_bj_soft)
+    pred_r2_bj_soft = calculate_predictive_r2(y_bj_test_valid.values, y_pred_bj_soft, baseline="historical_mean")
 
     # 保存软迁移模型
     os.makedirs(MODELS_DIR, exist_ok=True)
@@ -74,6 +76,7 @@ def main():
     print("Soft transfer (GENet) — 深市 — 最优参数：")
     print(f"  v={soft_best['v']}, alpha={soft_best['alpha']:.4f}, l1_ratio={soft_best['l1_ratio']}, CV MSE={soft_best['score']:.6f}")
     print(f"Soft transfer on BJ — MSE: {mse_bj_soft:.6f}")
+    print(f"Soft transfer on BJ — Predictive R2: {pred_r2_bj_soft:.6f}")
     print(f"模型已保存到: {SOFT_MODEL_PATH}")
     info = data["target_test_info"].copy()
     info_valid = info.iloc[valid_pos].copy()

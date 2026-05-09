@@ -15,6 +15,7 @@ SAVE_DIR = os.path.join(BASE_DIR, "output", "models")
 # 加载调参工具
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from tuning import tune_elasticnet_ts, extract_hard_transfer_params
+from paper_validation import calculate_predictive_r2
 
 print("=" * 50)
 print("=== 两阶段估计模型（沪深合并版）===")
@@ -159,7 +160,9 @@ print("模型评估结果")
 print("=" * 50)
 
 mse = mean_squared_error(y_bj_test_valid, y_pred)
+pred_r2 = calculate_predictive_r2(y_bj_test_valid.values, y_pred, baseline="historical_mean")
 print(f"MSE: {mse:.6f}")
+print(f"Predictive R2: {pred_r2:.6f}")
 
 # ========================================
 # 保存模型和结果

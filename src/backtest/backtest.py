@@ -5,9 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
-# 配置 matplotlib 支持中文显示
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS']
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+# 配置 matplotlib 字体：中文优先（宋体），英文用 Times New Roman
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['SimSun', '宋体', 'Times New Roman', 'Arial']
+plt.rcParams['axes.unicode_minus'] = False
 
 # 获取项目根目录
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +20,20 @@ STRATEGY_COL = "long_short_ret"  # 策略收益列名
 RF_ANNUAL = 0.0  # 年化无风险利率
 REAL_RETURNS_PATH = os.path.join(BASE_DIR, "data", "raw", "TRD_Mnth.csv")
 CODE_MAP_TXT_PATH = os.path.join(BASE_DIR, "data", "raw", "对照.txt")
+
+# 模型名称中文映射
+MODEL_NAME_MAP = {
+    "baseline_bj": "基线模型",
+    "hard_sh": "硬迁移_沪市",
+    "hard_sz": "硬迁移_深市",
+    "hard_sh_sz": "硬迁移_沪深",
+    "soft_sh": "软迁移_沪市",
+    "soft_sz": "软迁移_深市",
+    "soft_sh_sz": "软迁移_沪深",
+    "two_stage_sh": "两阶段_沪市",
+    "two_stage_sz": "两阶段_深市",
+    "two_stage_sh_sz": "两阶段_沪深",
+}
 
 def load_returns(csv_path: str, col: str) -> pd.Series:
     df = pd.read_csv(csv_path)
@@ -584,17 +599,18 @@ def save_report(metrics: dict,
     report_path = os.path.join(out_dir, f"{name}_backtest_report.csv")
     pd.Series(metrics).to_csv(report_path)
     # 净值曲线 - 保存到 plots 目录
+    display_name = MODEL_NAME_MAP.get(name, name)
     fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-    equity.plot(ax=ax[0], color="tab:blue", label="Strategy")
+    equity.plot(ax=ax[0], color="tab:blue", label="策略")
     if market_equity is not None:
         mk = market_equity.reindex(equity.index).ffill()
-        mk.plot(ax=ax[0], color="gray", linestyle="--", alpha=0.8, label="Market")
+        mk.plot(ax=ax[0], color="gray", linestyle="--", alpha=0.8, label="市场基准")
         ax[0].legend()
-    ax[0].set_title(f"{name} Equity Curve")
+    ax[0].set_title(f"{display_name} 净值曲线")
     ax[0].grid(True, alpha=0.3)
     max_dd_series = drawdown.cummin()
-    max_dd_series.plot(ax=ax[1], color="tab:red", label="Max Drawdown")
-    ax[1].set_title(f"{name} Max Drawdown Curve")
+    max_dd_series.plot(ax=ax[1], color="tab:red", label="最大回撤")
+    ax[1].set_title(f"{display_name} 最大回撤曲线")
     ax[1].grid(True, alpha=0.3)
     fig.tight_layout()
     # 使用 plots 目录（如果提供）或默认输出目录
@@ -606,7 +622,7 @@ def save_report(metrics: dict,
 
 def plot_combined_equity_curves(equity_data: dict,
                                 out_dir: str,
-                                title: str = "Equity Curve Comparison",
+                                title: str = "净值曲线对比",
                                 output_name: str = "combined_comparison.png",
                                 market_equity: pd.Series = None):
     """
@@ -625,7 +641,7 @@ def plot_combined_equity_curves(equity_data: dict,
 
     # 绘制市场基准线（如果有）
     if market_equity is not None and not market_equity.empty:
-        market_equity.plot(ax=ax, color="black", linestyle="--", alpha=0.7, label="Market (北交所等权)", linewidth=1.5)
+        market_equity.plot(ax=ax, color="black", linestyle="--", alpha=0.7, label="市场基准 (北交所等权)", linewidth=1.5)
 
     # 定义颜色方案
     color_map = {
@@ -638,11 +654,12 @@ def plot_combined_equity_curves(equity_data: dict,
     # 绘制每条曲线
     for name, equity in equity_data.items():
         color = color_map.get(name, None)
-        equity.plot(ax=ax, label=name, color=color)
+        display_name = MODEL_NAME_MAP.get(name, name)
+        equity.plot(ax=ax, label=display_name, color=color)
 
     ax.set_title(title)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Equity")
+    ax.set_xlabel("日期")
+    ax.set_ylabel("净值")
     ax.legend(loc="upper left")
     ax.grid(True, alpha=0.3)
 
@@ -703,7 +720,8 @@ def main():
             continue
 
         print(f"\n{'=' * 80}")
-        print(f"处理模型: {name}")
+        display_name = MODEL_NAME_MAP.get(name, name)
+        print(f"处理模型: {display_name}")
         print(f"{'=' * 80}")
 
         df_pred = load_predictions(pred_csv)
@@ -722,17 +740,18 @@ def main():
             coef = np.polyfit(x_fit.values, y_fit.values, 1)
             x_line = np.linspace(x_fit.min(), x_fit.max(), 100)
             y_line = coef[0] * x_line + coef[1]
-            ax.plot(x_line, y_line, color="red", linewidth=1.0, label="OLS fit")
+            ax.plot(x_line, y_line, color="red", linewidth=1.0, label="OLS 拟合")
             ax.legend()
         ax.axhline(0, color="gray", linewidth=0.8)
         ax.axvline(0, color="gray", linewidth=0.8)
-        title = f"{name} pred vs real return"
+        display_name = name if name not in MODEL_NAME_MAP else MODEL_NAME_MAP[name]
+        title = f"{display_name} 预测值 vs 真实收益"
         if not np.isnan(corr):
             title += f" (r={corr:.3f})"
         print(f"整体线性相关: r={corr:.3f}")
         ax.set_title(title)
-        ax.set_xlabel("pred")
-        ax.set_ylabel("real_return")
+        ax.set_xlabel("预测值")
+        ax.set_ylabel("真实收益")
         fig.tight_layout()
         scatter_path = os.path.join(PLOTS_DIR, f"{name}_pred_vs_real_scatter.png")
         fig.savefig(scatter_path, dpi=160)
@@ -750,7 +769,7 @@ def main():
         print(f"\n--- 十等分 Long-Short 组合 (论文标准) ---")
         monthly_ret_decile = build_decile_long_short_returns(df_pred, n_deciles=10, min_stocks_per_decile=5)
         if monthly_ret_decile.empty:
-            print(f"[WARN] {name} 十等分月度收益为空")
+            print(f"[WARN] {display_name} 十等分月度收益为空")
         else:
             out_csv = os.path.join(OUTPUT_DIR, f"{name}_decile_monthly_returns.csv")
             monthly_ret_decile.to_csv(out_csv, index=False, encoding="utf-8-sig")
@@ -763,7 +782,7 @@ def main():
 
                 # 检查指标是否有效（数据量足够）
                 if metrics_decile["months"] == 0 or pd.isna(metrics_decile["annual_return"]):
-                    print(f"[WARN] {name} 有效数据不足，跳过回测指标计算")
+                    print(f"[WARN] {display_name} 有效数据不足，跳过回测指标计算")
                     continue
 
                 # 计算 FF Alpha
